@@ -45,6 +45,9 @@
         //authorization
         vm.isAuthorized = false;
 
+        //assign control
+        vm.assignee = false;
+
         //status flags
         vm.isSelectedMappable = false;
         vm.isSelectedValidatable = false;
@@ -832,8 +835,8 @@
         function setUpSelectedTask(data) {
             var isLockedByMeMapping = data.taskStatus === 'LOCKED_FOR_MAPPING' && data.lockHolder === vm.user.username;
             var isLockedByMeValidation = data.taskStatus === 'LOCKED_FOR_VALIDATION' && data.lockHolder === vm.user.username;
-            vm.isSelectedMappable = (isLockedByMeMapping || data.taskStatus === 'READY' || data.taskStatus === 'INVALIDATED');
-            vm.isSelectedValidatable = (isLockedByMeValidation || data.taskStatus === 'MAPPED' || data.taskStatus === 'VALIDATED' || data.taskStatus === 'BADIMAGERY');
+            vm.isSelectedMappable = (isLockedByMeMapping || data.taskStatus === 'READY' || data.taskStatus === 'INVALIDATED') && (data.assignedTo === vm.user.username || !data.assignedTo);
+            vm.isSelectedValidatable = (isLockedByMeValidation || data.taskStatus === 'MAPPED' || data.taskStatus === 'VALIDATED' || data.taskStatus === 'BADIMAGERY') && (data.assignedTo === vm.user.username || !data.assignedTo);
             vm.selectedTaskData = data;
 
             // Format the comments by adding links to the usernames
@@ -865,6 +868,12 @@
             else {
                 vm.validatingStep = 'viewing';
             }
+
+            if (data.assignedTo) {
+                  vm.assignee = data.assignedTo;
+            }
+            else
+                  vm.assignee = false;
 
             //update browser address bar with task id search params
             $location.search('task', data.taskId);

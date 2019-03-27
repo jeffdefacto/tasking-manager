@@ -290,9 +290,14 @@
                                     <i class="fa fa-clock-o"></i>
                                     <span>{{ projectCtrl.getLockTime() }} {{ 'minutes left' | translate }}</span>
                                 </div>
+                                <div ng-show="!projectCtrl.assignee" style="display: inline-block; float: right;">
+                                    <span>{{ 'Assigned to: None' | translate }}</span>
+                                </div>
+                                <div ng-show="projectCtrl.assignee" style="display: inline-block; float: right;">
+                                    <span>{{ 'Assigned to: ' | translate }} {{ projectCtrl.assignee }}</span>
+                                </div>
                                 <div ng-show="projectCtrl.mappingStep === 'viewing' ">
                                     <!-- task information -->
-
                                     <div ng-show="projectCtrl.lockedTasksForCurrentUser.length > 0">
                                         <div class="error"
                                              role="alert">
@@ -451,7 +456,7 @@
                                     <div class="form__group form__group--section">
                                         <div>
                                             <h6 style="width:84%">Task too big to complete quickly? Or is the satellite imagery not good? Choose split task or mark as bad imagery.</h6>
-                                            
+
                                         </div>
                                         <ul class="list-type--none buttons--sidebyside">
                                             <li>
@@ -498,7 +503,7 @@
                                                         {{ ' Mark as Bad Imagery' | translate }}
                                                 </button>
                                             </li>
-                                            
+
                                             </ul>
                                         <div>
                                             <h6 style="width:84%">Can't finish but need to stop mapping? Or have you completely mapped the area? Leave a comment and select one of the options below that matches your editing status.</h6>
@@ -529,7 +534,7 @@
                                                         {{ ' Stop Mapping' | translate }}
                                                 </button>
                                             </li>
-                                                    
+
                                             <li>
                                                 <button id="complete-mapping-btn" class="button"
                                                         ng-click="projectCtrl.unLockTaskMapping(projectCtrl.comment, 'MAPPED')"
@@ -544,9 +549,9 @@
                                                         {{ ' Mark as Completely Mapped' | translate }}
                                                 </button>
                                             </li>
-                                           
+
                                         </ul>
-                                       
+
                                         <div ng-show="projectCtrl.taskUnLockError">
                                             <div>
                                                 <div class="error" role="alert">

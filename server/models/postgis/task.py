@@ -220,6 +220,16 @@ class TaskHistory(db.Model):
             [TaskAction.LOCKED_FOR_MAPPING.name, TaskAction.LOCKED_FOR_VALIDATION.name,
              TaskAction.AUTO_UNLOCKED_FOR_MAPPING.name, TaskAction.AUTO_UNLOCKED_FOR_VALIDATION.name])
 
+    @staticmethod
+    def get_last_user(project_id: int, task_id: int):
+        """ Get the user_id from the last time the task had a STATUS_CHANGE"""
+        result = db.session.query(TaskHistory.user_id) \
+            .filter(TaskHistory.project_id == project_id,
+                    TaskHistory.task_id == task_id,
+                    TaskHistory.action == TaskAction.STATE_CHANGE.name) \
+            .order_by(TaskHistory.action_date.desc()).all()
+        return result[1]
+
 
 class Task(db.Model):
     """ Describes an individual mapping Task """
@@ -239,11 +249,13 @@ class Task(db.Model):
     locked_by = db.Column(db.BigInteger, db.ForeignKey('users.id', name='fk_users_locked'))
     mapped_by = db.Column(db.BigInteger, db.ForeignKey('users.id', name='fk_users_mapper'))
     validated_by = db.Column(db.BigInteger, db.ForeignKey('users.id', name='fk_users_validator'))
+    assigned_to = db.Column(db.BigInteger, db.ForeignKey('users.id', name='fk_users_assigned'))
 
     # Mapped objects
     task_history = db.relationship(TaskHistory, cascade="all")
     lock_holder = db.relationship(User, foreign_keys=[locked_by])
     mapper = db.relationship(User, foreign_keys=[mapped_by])
+    assignee = db.relationship(User, foreign_keys=[assigned_to])
 
     def create(self):
         """ Creates and saves the current model to the DB """
@@ -393,12 +405,14 @@ class Task(db.Model):
         self.set_task_history(TaskAction.LOCKED_FOR_MAPPING, user_id)
         self.task_status = TaskStatus.LOCKED_FOR_MAPPING.value
         self.locked_by = user_id
+        self.assigned_to = user_id
         self.update()
 
     def lock_task_for_validating(self, user_id: int):
         self.set_task_history(TaskAction.LOCKED_FOR_VALIDATION, user_id)
         self.task_status = TaskStatus.LOCKED_FOR_VALIDATION.value
         self.locked_by = user_id
+        self.assigned_to = user_id
         self.update()
 
     def reset_task(self, user_id: int):
@@ -448,11 +462,14 @@ class Task(db.Model):
         if new_state in [TaskStatus.MAPPED, TaskStatus.BADIMAGERY] and TaskStatus(self.task_status) != TaskStatus.LOCKED_FOR_VALIDATION:
             # Don't set mapped if state being set back to mapped after validation
             self.mapped_by = user_id
+            self.assigned_to = None
         elif new_state == TaskStatus.VALIDATED:
             self.validated_by = user_id
+            self.assigned_to = None
         elif new_state == TaskStatus.INVALIDATED:
             self.mapped_by = None
             self.validated_by = None
+            self.assigned_to = TaskHistory.get_last_user(self.project_id, self.id)
 
         if not undo:
             # Using a slightly evil side effect of Actions and Statuses having the same name here :)
@@ -485,14 +502,15 @@ class Task(db.Model):
         :return: geojson.FeatureCollection
         """
         project_tasks = \
-            db.session.query(Task.id, Task.x, Task.y, Task.zoom, Task.is_square, Task.task_status,
+            db.session.query(Task.id, Task.x, Task.y, Task.zoom, Task.is_square, Task.task_status, Task.assignee,
                              Task.geometry.ST_AsGeoJSON().label('geojson')).filter(Task.project_id == project_id).all()
 
         tasks_features = []
         for task in project_tasks:
             task_geometry = geojson.loads(task.geojson)
             task_properties = dict(taskId=task.id, taskX=task.x, taskY=task.y, taskZoom=task.zoom,
-                                   taskIsSquare=task.is_square, taskStatus=TaskStatus(task.task_status).name)
+                                   taskIsSquare=task.is_square, taskStatus=TaskStatus(task.task_status).name,
+                                   assignedTo=task.assignee)
 
             feature = geojson.Feature(geometry=task_geometry, properties=task_properties)
             tasks_features.append(feature)
@@ -565,6 +583,7 @@ class Task(db.Model):
         task_dto.lock_holder = self.lock_holder.username if self.lock_holder else None
         task_dto.task_history = task_history
         task_dto.auto_unlock_seconds = Task.auto_unlock_delta().total_seconds()
+        task_dto.assignee = self.assignee.username if self.assignee else None
 
         per_task_instructions = self.get_per_task_instructions(preferred_locale)
 
@@ -615,3 +634,10 @@ class Task(db.Model):
             copies.append(entry)
 
         return copies
+
+    def assign_check(self, user_id):
+        """ Determines if task is unassigned or assigned to user """
+        if self.assigned_to not in [None, user_id]:
+            return False
+
+        return True
